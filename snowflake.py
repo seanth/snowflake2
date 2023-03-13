@@ -27,8 +27,9 @@ import hashlib
 import os
 from pprint import pprint
 # import json
-from sklearn.cluster import KMeans
 from math import sqrt
+from xml.dom import minidom
+
 
 import configparser                         #pip install configparser
 import numpy as np                          #pip install numpy
@@ -39,19 +40,20 @@ import jax
 import jax.scipy as jsp
 from PIL import Image                       #pip install pillow
 import matplotlib.pyplot as plt             #pip install matplotlib
+from sklearn.cluster import KMeans          #?pip install sklearn?
+from svgpathtools import parse_path         #pip install svgpathtools
+import svgwrite                             #pip install svgwrite
+
+
+
+
+# import random
+
 
 # from PIL import Image, ImageDraw, ImageFont
-
 # import tempfile
-# import random
-import matplotlib.pyplot as plt
-
 # from enum import IntEnum
-# from xml.dom import minidom
-
-# from IPython.core.display import SVG
-# import svgwrite
-# from svgpathtools import parse_path
+# 
 # from scipy import interpolate
 import sys
 
@@ -134,43 +136,47 @@ def prep_image(nd, bbox=None, return_bbox=False, zoom_factor=2):
         return (nd, bbox)
     return nd
 
-# def potrace(img, spot_threshold=None, size=None, margin=None, angle=None, dpi=96, tight=False):
-#     thePath = (f'{root}/{args.name}_{sn}/')
-#     # start building out the command
-#     cmd = ['potrace -i -b svg --flat']
-#     if margin != None:
-#         cmd.append(f'-M {margin}')
-#     if spot_threshold != None:
-#         cmd.append(f'-t {spot_threshold}')
-#     if size != None:
-#         cmd.append(f'-W {size[0]} -H {size[1]}')
-#     if angle != None:
-#         cmd.append(f'-A {angle}')
-#     if dpi != None:
-#         cmd.append(f'-r {dpi}')
-#     if tight:
-#         cmd.append('--tight')
-#     print(cmd)
-#     input_img = os.path.join(f'{root}/{args.name}_{sn}/', 'input_image.bmp')
-#     output_svg = os.path.join(f'{root}/{args.name}_{sn}/', 'output_trace.svg')
-#     print(input_img)
-#     print(output_svg)
-#     img.save(input_img)
-#     sys.exit()
-#     # acquire temp directory
-#     # with tempfile.TemporaryDirectory() as tmp_dir:
-#     #     input_img = os.path.join(tmp_dir, 'input_image.bmp')
-#     #     output_svg = os.path.join(tmp_dir, 'output_trace.svg')
-#     #     img.save(input_img)
-#     #     #
-#     #     cmd.append(f'-o {output_svg} {input_img}')
-#     #     cmd = str.join(' ', cmd)
-#     #     #!{cmd}
-#     #     doc = minidom.parse(output_svg)
-#     width = doc.getElementsByTagName('svg')[0].getAttribute('width')
-#     height = doc.getElementsByTagName('svg')[0].getAttribute('height')
-#     paths = [path.getAttribute('d') for path in doc.getElementsByTagName('path')]
-#     return (width, height, paths)
+def potrace(img, spot_threshold=None, size=None, margin=None, angle=None, dpi=96, tight=False, theLayer=''):
+    thePath = (f'{root}/{args.name}_{sn}/')
+    # start building out the command
+    cmd = ['potrace -i -b svg --flat']
+    if margin != None:
+        cmd.append(f'-M {margin}')
+    if spot_threshold != None:
+        cmd.append(f'-t {spot_threshold}')
+    if size != None:
+        cmd.append(f'-W {size[0]} -H {size[1]}')
+    if angle != None:
+        cmd.append(f'-A {angle}')
+    if dpi != None:
+        cmd.append(f'-r {dpi}')
+    if tight:
+        cmd.append('--tight')
+    input_img = os.path.join(f'{root}/{args.name}_{sn}/', f'input_image{theLayer}.bmp')
+    output_svg = os.path.join(f'{root}/{args.name}_{sn}/', f'output_trace{theLayer}.svg')
+    print(input_img)
+    print(output_svg)
+    img.save(input_img)
+    # acquire temp directory
+    # with tempfile.TemporaryDirectory() as tmp_dir:
+    #     input_img = os.path.join(tmp_dir, 'input_image.bmp')
+    #     output_svg = os.path.join(tmp_dir, 'output_trace.svg')
+    #     img.save(input_img)
+    #     #
+    #     cmd.append(f'-o {output_svg} {input_img}')
+    #     cmd = str.join(' ', cmd)
+    #     #!{cmd}
+    #     doc = minidom.parse(output_svg)
+    cmd.append(f'-o {output_svg} {input_img}')
+    cmd = str.join(' ', cmd)
+    msg = "Running '%s'" % cmd
+    print(msg)
+    os.system(cmd) #!{cmd}
+    doc = minidom.parse(output_svg)
+    width = doc.getElementsByTagName('svg')[0].getAttribute('width')
+    height = doc.getElementsByTagName('svg')[0].getAttribute('height')
+    paths = [path.getAttribute('d') for path in doc.getElementsByTagName('path')]
+    return (width, height, paths)
 
 def plot_snowflake(crystal_mass=None, attached=None, diffusive_mass=None):
     thePath = f'{root}/{args.name}_{sn}/{args.name}_{sn}.png'
@@ -194,7 +200,7 @@ def plot_snowflake(crystal_mass=None, attached=None, diffusive_mass=None):
 def render_svg(crystal_mass=None, attached=None, size=3.5, margin=.1, random_state=1, svg_fn='output.svg'):
     cm = crystal_mass.reshape(-1, 1)
     sample_weight = np.ravel(attached)
-    bands = KMeans(n_clusters=3, random_state=random_state).fit_predict(cm, sample_weight=sample_weight)
+    bands = KMeans(n_clusters=3, random_state=random_state, n_init=10).fit_predict(cm, sample_weight=sample_weight)
     unique, counts = np.unique(bands, return_counts=1)
     bands = bands.reshape(crystal_mass.shape)
     
@@ -225,10 +231,11 @@ def render_svg(crystal_mass=None, attached=None, size=3.5, margin=.1, random_sta
     
     colors = ['blue', 'cyan', 'green', 'purple', 'orange', 'red']
     for band_idx in range(len(unique)):
+        print(band_idx)
         img_ary = prep_image(attached * (bands == band_idx), bbox=bbox, zoom_factor=5)
         img_ary = (img_ary[:, :, np.newaxis] * [0xFF, 0xFF, 0xFF]).astype(np.uint8)
         img = Image.fromarray(img_ary, mode='RGB')
-        (svg_width, svg_height, paths) = potrace(img, size=img_size)
+        (svg_width, svg_height, paths) = potrace(img, size=img_size, theLayer=band_idx)
         for path in paths:
             color = colors[band_idx]
             grp.add(dwg.path(d=path, stroke=color, fill='none', stroke_width='.2in'))
@@ -237,8 +244,8 @@ def render_svg(crystal_mass=None, attached=None, size=3.5, margin=.1, random_sta
     root_grp.add(dwg.rect(insert=(0, 0), size=(lengths[0], lengths[1]), rx=100, ry=100, fill='none', stroke='white', stroke_width='.2in'))
     dwg.add(root_grp)
     dwg.save()
-    svg = SVG(filename=svg_fn)
-    display(svg)
+    #svg = SVG(filename=svg_fn)
+    #display(svg)
         
 def do_step(diffusive_mass=None, boundary_mass=None, crystal_mass=None, attached=None, rngkey=None, gamma=None, params=None):
     (beta,  theta, alpha, kappa, mu, upsilon, sigma) = params
@@ -394,8 +401,8 @@ if __name__ == "__main__":
     print("ending run simulation")
 
     ####################################################
-    #svg_fn = f'{root}/{args.name}_{sn}/{args.name}_{sn}.svg'
-    #render_svg(crystal_mass=crystal_mass, attached=attached, random_state=random_seed, svg_fn=svg_fn)
+    svg_fn = f'{root}/{args.name}_{sn}/{args.name}_{sn}.svg'
+    render_svg(crystal_mass=crystal_mass, attached=attached, random_state=random_seed, svg_fn=svg_fn)
     ####################################################
     print()
     plot_snowflake(crystal_mass=crystal_mass, attached=attached, diffusive_mass=diffusive_mass)
