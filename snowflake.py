@@ -20,35 +20,40 @@ salt = 29 #@param {type:"slider", min:0, max:1024, step:1}
 mass_ratio_cutoff = 0.25 #@param {type:"slider", min:0.01, max:0.99, step:0.01}
 
 #spot threshold (potrace)
-#spot_threshold = 0 #@param {type:"slider", min:0, max:500, step:10}
+spot_threshold = 0 #@param {type:"slider", min:0, max:500, step:10}
 
 import argparse
 import hashlib
 import os
+from pprint import pprint
+# import json
+from sklearn.cluster import KMeans
+from math import sqrt
 
 import configparser                         #pip install configparser
 import numpy as np                          #pip install numpy
 from scipy.interpolate import CubicSpline   #pip install scipy
+import scipy.ndimage as ndi
 import jax.numpy as jnp                     #pip install jax
 import jax
 import jax.scipy as jsp
+from PIL import Image                       #pip install pillow
+import matplotlib.pyplot as plt             #pip install matplotlib
 
 # from PIL import Image, ImageDraw, ImageFont
-# import json
+
 # import tempfile
 # import random
-# from pprint import pprint
-# from math import sqrt
-# import scipy.ndimage as ndi
-# import matplotlib.pyplot as plt
-# from PIL import Image
+import matplotlib.pyplot as plt
+
 # from enum import IntEnum
 # from xml.dom import minidom
-# from sklearn.cluster import KMeans
+
 # from IPython.core.display import SVG
 # import svgwrite
 # from svgpathtools import parse_path
 # from scipy import interpolate
+import sys
 
 ##########################################
 #Import the options#
@@ -129,65 +134,60 @@ def prep_image(nd, bbox=None, return_bbox=False, zoom_factor=2):
         return (nd, bbox)
     return nd
 
-def potrace(img, spot_threshold=None, size=None, margin=None, angle=None, dpi=96, tight=False):
-    # start building out the command
-    cmd = ['potrace -i -b svg --flat']
-    if margin != None:
-        cmd.append(f'-M {margin}')
-    if spot_threshold != None:
-        cmd.append(f'-t {spot_threshold}')
-    if size != None:
-        cmd.append(f'-W {size[0]} -H {size[1]}')
-    if angle != None:
-        cmd.append(f'-A {angle}')
-    if dpi != None:
-        cmd.append(f'-r {dpi}')
-    if tight:
-        cmd.append('--tight')
-    # acquire temp directory
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        input_img = os.path.join(tmp_dir, 'input_image.bmp')
-        output_svg = os.path.join(tmp_dir, 'output_trace.svg')
-        img.save(input_img)
-        #
-        cmd.append(f'-o {output_svg} {input_img}')
-        cmd = str.join(' ', cmd)
-        #!{cmd}
-        doc = minidom.parse(output_svg)
-    width = doc.getElementsByTagName('svg')[0].getAttribute('width')
-    height = doc.getElementsByTagName('svg')[0].getAttribute('height')
-    paths = [path.getAttribute('d') for path in doc.getElementsByTagName('path')]
-    return (width, height, paths)
+# def potrace(img, spot_threshold=None, size=None, margin=None, angle=None, dpi=96, tight=False):
+#     thePath = (f'{root}/{args.name}_{sn}/')
+#     # start building out the command
+#     cmd = ['potrace -i -b svg --flat']
+#     if margin != None:
+#         cmd.append(f'-M {margin}')
+#     if spot_threshold != None:
+#         cmd.append(f'-t {spot_threshold}')
+#     if size != None:
+#         cmd.append(f'-W {size[0]} -H {size[1]}')
+#     if angle != None:
+#         cmd.append(f'-A {angle}')
+#     if dpi != None:
+#         cmd.append(f'-r {dpi}')
+#     if tight:
+#         cmd.append('--tight')
+#     print(cmd)
+#     input_img = os.path.join(f'{root}/{args.name}_{sn}/', 'input_image.bmp')
+#     output_svg = os.path.join(f'{root}/{args.name}_{sn}/', 'output_trace.svg')
+#     print(input_img)
+#     print(output_svg)
+#     img.save(input_img)
+#     sys.exit()
+#     # acquire temp directory
+#     # with tempfile.TemporaryDirectory() as tmp_dir:
+#     #     input_img = os.path.join(tmp_dir, 'input_image.bmp')
+#     #     output_svg = os.path.join(tmp_dir, 'output_trace.svg')
+#     #     img.save(input_img)
+#     #     #
+#     #     cmd.append(f'-o {output_svg} {input_img}')
+#     #     cmd = str.join(' ', cmd)
+#     #     #!{cmd}
+#     #     doc = minidom.parse(output_svg)
+#     width = doc.getElementsByTagName('svg')[0].getAttribute('width')
+#     height = doc.getElementsByTagName('svg')[0].getAttribute('height')
+#     paths = [path.getAttribute('d') for path in doc.getElementsByTagName('path')]
+#     return (width, height, paths)
 
 def plot_snowflake(crystal_mass=None, attached=None, diffusive_mass=None):
+    thePath = f'{root}/{args.name}_{sn}/{args.name}_{sn}.png'
     sz = 7
     fig = plt.figure(figsize=(sz, sz))
     plt.imshow(prep_image(crystal_mass), interpolation='nearest')
-    plt.show()
+    #plt.show()
+    fig.savefig(thePath)
     
-    '''
-    fig = plt.figure(figsize=(sz, sz))
-    plt.imshow(prep_image(attached), interpolation='nearest')
-    plt.show()
+    # fig = plt.figure(figsize=(sz, sz))
+    # plt.imshow(prep_image(attached), interpolation='nearest')
+    # plt.show()
     
-    fig = plt.figure(figsize=(sz, sz))
-    plt.imshow(prep_image(diffusive_mass), interpolation='nearest')
-    plt.show()
-    '''
-
-def write_serial_number(name, serial, svg_fn):
-    sz = (200, 60)
-    txt = Image.new("RGB", sz, (0, 0, 0))
-    fnt = ImageFont.truetype(ft, 32)
-    d = ImageDraw.Draw(txt)
-    d.text((0, 0), serial, font=fnt, fill=(255, 255, 255))
-    (svg_width, svg_height, paths) = potrace(txt, tight=True)
-    bbox = parse_path(paths[0]).bbox()
+    # fig = plt.figure(figsize=(sz, sz))
+    # plt.imshow(prep_image(diffusive_mass), interpolation='nearest')
+    # plt.show()
     
-    dwg = svgwrite.Drawing(svg_fn, size=('1in', '.2in'), debug=True)
-    dwg.viewbox(minx=bbox[0], width=bbox[1] - bbox[0], miny=bbox[2], height=bbox[3] - bbox[2])
-    dwg.add(dwg.path(d=paths[0], fill='white'))
-    dwg.save() 
 
 def render_svg(crystal_mass=None, attached=None, size=3.5, margin=.1, random_state=1, svg_fn='output.svg'):
     cm = crystal_mass.reshape(-1, 1)
@@ -238,7 +238,6 @@ def render_svg(crystal_mass=None, attached=None, size=3.5, margin=.1, random_sta
     svg = SVG(filename=svg_fn)
     display(svg)
         
-#@jax.jit
 def do_step(diffusive_mass=None, boundary_mass=None, crystal_mass=None, attached=None, rngkey=None, gamma=None, params=None):
     (beta,  theta, alpha, kappa, mu, upsilon, sigma) = params
 
@@ -308,6 +307,13 @@ def run_simulation(random_seed=None, mass_ratio_cutoff=.25, max_steps=SNOWFLAKE_
     total_diff_mass = jnp.sum(diffusive_mass)
     for cur_step in range(max_steps):
         mass_ratio = jnp.sum(boundary_mass + crystal_mass) / total_diff_mass
+        ###feedback ported from v1
+        ###nice to have the masses show in a classroom setting
+        if cur_step % 50 == 0:
+            #msg = "Step #%d/%dp (%.2f%% scl), %d/%d (%.2f%%), %.2f dM, %.2f bM, %.2f cM, tot %.2f M" % (self.iteration, d, (float(d * 2 * X_SCALE_FACTOR) / self.iteration) * 100, acnt, bcnt, (float(bcnt) / acnt) * 100, dm, bm, cm, dm + cm + bm)
+            #msg = "Step #:%d/%d (%d%%), dM: %.2f, bM:%.2f, cM:%.2f, totM %.2f, ratioM: %.2f" % (cur_step, max_steps, ((cur_step/max_steps)*100), ,jnp.sum(diffusive_mass), jnp.sum(boundary_mass), jnp.sum(crystal_mass), jnp.sum(diffusive_mass) + jnp.sum(crystal_mass) + jnp.sum(boundary_mass), mass_ratio)
+            msg = "Step #:%d/%d (%d%%), dM: %.2f, bM:%.2f, cM:%.2f, totM %.2f, ratio[(b+c)/d]M: %.2f" % (cur_step, max_steps, ((cur_step/max_steps)*100), jnp.sum(diffusive_mass), jnp.sum(boundary_mass), jnp.sum(crystal_mass), jnp.sum(diffusive_mass) + jnp.sum(crystal_mass) + jnp.sum(boundary_mass), mass_ratio)
+            print(msg)
         if mass_ratio >=  mass_ratio_cutoff:
             return (diffusive_mass, boundary_mass, crystal_mass, attached, cur_step)
         (next_key, step_key) = jax.random.split(next_key)
@@ -317,35 +323,6 @@ def run_simulation(random_seed=None, mass_ratio_cutoff=.25, max_steps=SNOWFLAKE_
     return (diffusive_mass, boundary_mass, crystal_mass, attached, cur_step)
 
 # (random_seed, gamma, params) = get_gamma_and_params(name=name, salt=salt)
-
-# sn = hex(random_seed)[2:]
-# root = '/content/SnowflakeDesigns'
-# os.makedirs(f'{root}/{name}_{sn}', exist_ok=True)
-# ser_svg_fn = f'{root}/{name}_{sn}/serial_{name}_{sn}.svg'
-# svg_fn = f'{root}/{name}_{sn}/{name}_{sn}.svg'
-# jsfn = f'{root}/{name}_{sn}/{name}_{sn}.json'
-
-# (diffusive_mass, boundary_mass, crystal_mass, attached, cur_step) =  run_simulation(random_seed=random_seed, mass_ratio_cutoff=mass_ratio_cutoff, gamma=gamma, params=params)
-# render_svg(crystal_mass=crystal_mass, attached=attached, random_state=random_seed, svg_fn=svg_fn)
-# print()
-# plot_snowflake(crystal_mass=crystal_mass, attached=attached, diffusive_mass=diffusive_mass)
-# write_serial_number(name, sn, ser_svg_fn)
-
-# info = {
-#     'name': name,
-#     'salt': salt,
-#     'n_steps': cur_step,
-#     'seed': random_seed,
-#     'sn': sn,
-#     'mass_ratio_cutoff': mass_ratio_cutoff,
-#     'spot_threshold': spot_threshold
-# }
-
-# with open(jsfn, 'w') as fh:
-#     json.dump(info, fh)
-
-# print(f"\n\n{'-' * 20}\nGenerator details\n{'-' * 20}\n")
-# pprint(info)
 
 def get_cli():
     parser = argparse.ArgumentParser(description='Snowflake Generator.')
@@ -394,11 +371,6 @@ if __name__ == "__main__":
     os.makedirs(theDir, exist_ok=True)
     print("end making necessary folders")
 
-    # ser_svg_fn = f'{root}/{name}_{sn}/serial_{name}_{sn}.svg'
-    # svg_fn = f'{root}/{name}_{sn}/{name}_{sn}.svg'
-    # jsfn = f'{root}/{name}_{sn}/{name}_{sn}.json'
-    # print("end making necessary folders")
-
     ####################################################
     self_mask = np.zeros((3,3))
     self_mask[1,1] = 1
@@ -409,10 +381,36 @@ if __name__ == "__main__":
     self_mask = jnp.array(self_mask)
     neighbor_mask = jnp.array(neighbor_mask)
     self_and_neighbor_mask = jnp.array(self_and_neighbor_mask)
+    ####################################################
+
+
+
     print("starting simulation")
     (diffusive_mass, boundary_mass, crystal_mass, attached, cur_step) =  run_simulation(random_seed=random_seed, mass_ratio_cutoff=mass_ratio_cutoff, max_steps=args.max_steps, gamma=gamma, params=params)
     print("ending run simulation")
-    # render_svg(crystal_mass=crystal_mass, attached=attached, random_state=random_seed, svg_fn=svg_fn)
-    # print()
-    # plot_snowflake(crystal_mass=crystal_mass, attached=attached, diffusive_mass=diffusive_mass)
-    # # write_serial_number(name, sn, ser_svg_fn)
+
+    ####################################################
+    #svg_fn = f'{root}/{args.name}_{sn}/{args.name}_{sn}.svg'
+    #render_svg(crystal_mass=crystal_mass, attached=attached, random_state=random_seed, svg_fn=svg_fn)
+    ####################################################
+    print()
+    plot_snowflake(crystal_mass=crystal_mass, attached=attached, diffusive_mass=diffusive_mass)
+
+    info = {
+        'name': args.name,
+        'salt': salt,
+        'n_steps': cur_step,
+        'seed': random_seed,
+        'sn': sn,
+        'mass_ratio_cutoff': mass_ratio_cutoff,
+        'spot_threshold': spot_threshold
+    }
+
+    ###but why? STH 0313-2023##############################
+    # jsfn = f'{root}/{args.name}_{sn}/{args.name}_{sn}.json'
+    # with open(jsfn, 'w') as fh:
+    #     json.dump(info, fh)
+    #######################################################
+
+    print(f"\n\n{'-' * 20}\nGenerator details\n{'-' * 20}\n")
+    pprint(info)
