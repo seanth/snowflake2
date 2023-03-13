@@ -15,60 +15,72 @@
 # 
 # 
 # 
-#Name: Enter the name as a generative seed for the snowflake simulator
-#max_steps: Maximum number of steps in the simulation. Min 1000. Max 10000
 
-#@title Design your Snowflake
-
-#@markdown ## Snowflake seed
-#@markdown Enter the name as a generative seed for the snowflake simulator
-name = "best" #@param {type:"string"}
-
-#@markdown Permute snowflake seed with an optional salt value. 
 salt = 29 #@param {type:"slider", min:0, max:1024, step:1}
-
-#@markdown Stop the simulaton when the ratio between solid and vaporous water exceeds this value
 mass_ratio_cutoff = 0.25 #@param {type:"slider", min:0.01, max:0.99, step:0.01}
 
-#@markdown Maximum number of steps in the simulation
-max_steps = 10000 #@param {type:"slider", min:1000, max:10000, step:100}
+#spot threshold (potrace)
+#spot_threshold = 0 #@param {type:"slider", min:0, max:500, step:10}
 
-#@markdown Spot threshold (potrace)
-spot_threshold = 0 #@param {type:"slider", min:0, max:500, step:10}
-
-#@markdown Upon the first execution, there might be a few minute delay while the notebook provisions the environment. 
-
-# !(if [ ! -f /tmp/sentinel ]; then apt-get update && apt-get install potrace && pip install svgwrite svgpathtools splines && touch /tmp/sentinel; fi) 2>&1 > /dev/null
-# !(if [ ! -f "SourceCodePro-Regular.ttf" ]; then wget https://github.com/adobe-fonts/source-code-pro/raw/release/TTF/SourceCodePro-Regular.ttf > /dev/null 2>/dev/null; fi)
-
-# ft = "SourceCodePro-Regular.ttf"
-
-from PIL import Image, ImageDraw, ImageFont
-
-import os
-import json
+import argparse
 import hashlib
-import tempfile
-import random
-from pprint import pprint
-from math import sqrt
-import numpy as np
-import jax.numpy as jnp
-import jax.scipy as jsp
+import os
+
+import configparser                         #pip install configparser
+import numpy as np                          #pip install numpy
+from scipy.interpolate import CubicSpline   #pip install scipy
+import jax.numpy as jnp                     #pip install jax
 import jax
+import jax.scipy as jsp
 
-import scipy.ndimage as ndi
-import matplotlib.pyplot as plt
-from PIL import Image
-from enum import IntEnum
+# from PIL import Image, ImageDraw, ImageFont
+# import json
+# import tempfile
+# import random
+# from pprint import pprint
+# from math import sqrt
+# import scipy.ndimage as ndi
+# import matplotlib.pyplot as plt
+# from PIL import Image
+# from enum import IntEnum
+# from xml.dom import minidom
+# from sklearn.cluster import KMeans
+# from IPython.core.display import SVG
+# import svgwrite
+# from svgpathtools import parse_path
+# from scipy import interpolate
 
-from xml.dom import minidom
-from sklearn.cluster import KMeans
-from IPython.core.display import SVG
-import svgwrite
-from svgpathtools import parse_path
-from scipy.interpolate import CubicSpline
-from scipy import interpolate
+##########################################
+#Import the options#
+try:
+    theConfig=configparser.RawConfigParser()
+    theConfig.optionxform = str 
+    theConfig.read('snowflake.ini')
+    theConfigSection='Snowflake Options'
+except configparser.MissingSectionHeaderError:
+    print("Warning: Invalid config file, no [%s] section.") % (theConfigSection)
+    raise
+
+SNOWFLAKE_DEFAULTS={}
+for i in theConfig.items(theConfigSection):
+    theItem=i[0]
+    try:
+        theValue=theConfig.getint(theConfigSection, theItem)
+    except:
+        try:
+            theValue=theConfig.getboolean(theConfigSection, theItem)
+        except:
+            try:
+                theValue=theConfig.getfloat(theConfigSection, theItem)
+            except:
+                try:
+                    theValue=theConfig.get(theConfigSection, theItem)
+                    if theValue=="None": theValue=None
+                except:
+                    print("what the...?")
+    SNOWFLAKE_DEFAULTS[theItem]=theValue
+
+
 
 DefaultCurves = {
     "beta": (1.3, 2),
@@ -84,20 +96,7 @@ ParamOrder = ('beta', 'theta', 'alpha', 'kappa', 'mu', 'upsilon', 'sigma')
 
 conv2d = jsp.signal.convolve
 
-height = 256
-width = 256
-shape = (width, height)
-self_mask = np.zeros((3,3))
-self_mask[1,1] = 1
-neighbor_mask = np.fliplr(1 - np.eye(3))
-self_and_neighbor_mask = self_mask + neighbor_mask
-
-# convert numpy arrays over to JAX
-self_mask = jnp.array(self_mask)
-neighbor_mask = jnp.array(neighbor_mask)
-self_and_neighbor_mask = jnp.array(self_and_neighbor_mask)
-
-def get_gamma_and_params(name, max_steps=max_steps, salt=0, curves=DefaultCurves):
+def get_gamma_and_params(name, max_steps=SNOWFLAKE_DEFAULTS['max_steps'], salt=0, curves=DefaultCurves):
     t_value = name.encode('utf8')
     hs = hashlib.sha256(t_value)
     hs.hexdigest()
@@ -153,7 +152,7 @@ def potrace(img, spot_threshold=None, size=None, margin=None, angle=None, dpi=96
         #
         cmd.append(f'-o {output_svg} {input_img}')
         cmd = str.join(' ', cmd)
-        !{cmd}
+        #!{cmd}
         doc = minidom.parse(output_svg)
     width = doc.getElementsByTagName('svg')[0].getAttribute('width')
     height = doc.getElementsByTagName('svg')[0].getAttribute('height')
@@ -239,7 +238,7 @@ def render_svg(crystal_mass=None, attached=None, size=3.5, margin=.1, random_sta
     svg = SVG(filename=svg_fn)
     display(svg)
         
-@jax.jit
+#@jax.jit
 def do_step(diffusive_mass=None, boundary_mass=None, crystal_mass=None, attached=None, rngkey=None, gamma=None, params=None):
     (beta,  theta, alpha, kappa, mu, upsilon, sigma) = params
 
@@ -290,18 +289,18 @@ def do_step(diffusive_mass=None, boundary_mass=None, crystal_mass=None, attached
     attached = attached.astype(jnp.uint8)
     return (diffusive_mass, boundary_mass, crystal_mass, attached)
 
-def run_simulation(random_seed=None, mass_ratio_cutoff=.25, max_steps=max_steps, gamma=None, params=None):
+def run_simulation(random_seed=None, mass_ratio_cutoff=.25, max_steps=SNOWFLAKE_DEFAULTS['max_steps'], gamma=None, params=None):
     random_seed = random_seed if random_seed is not None else 1
 
     # initialize
-    diffusive_mass = jnp.ones(shape) * gamma
-    boundary_mass = jnp.zeros(shape)
-    crystal_mass = jnp.zeros(shape)
-    attached = jnp.zeros(shape).astype(np.uint8)
+    diffusive_mass = jnp.ones(args.shape) * gamma
+    boundary_mass = jnp.zeros(args.shape)
+    crystal_mass = jnp.zeros(args.shape)
+    attached = jnp.zeros(args.shape).astype(np.uint8)
     next_key = jax.random.PRNGKey(random_seed)
     cur_step = 0
     # attach seed crystal
-    seed_idx = (width // 2, height // 2)
+    seed_idx = (args.width // 2, args.height // 2)
     attached = attached.at[seed_idx].set(1)
     crystal_mass = crystal_mass.at[seed_idx].set(diffusive_mass[seed_idx])
     diffusive_mass = diffusive_mass.at[seed_idx].set(0)
@@ -317,33 +316,103 @@ def run_simulation(random_seed=None, mass_ratio_cutoff=.25, max_steps=max_steps,
 
     return (diffusive_mass, boundary_mass, crystal_mass, attached, cur_step)
 
-(random_seed, gamma, params) = get_gamma_and_params(name=name, salt=salt)
+# (random_seed, gamma, params) = get_gamma_and_params(name=name, salt=salt)
 
-sn = hex(random_seed)[2:]
-root = '/content/SnowflakeDesigns'
-os.makedirs(f'{root}/{name}_{sn}', exist_ok=True)
-ser_svg_fn = f'{root}/{name}_{sn}/serial_{name}_{sn}.svg'
-svg_fn = f'{root}/{name}_{sn}/{name}_{sn}.svg'
-jsfn = f'{root}/{name}_{sn}/{name}_{sn}.json'
+# sn = hex(random_seed)[2:]
+# root = '/content/SnowflakeDesigns'
+# os.makedirs(f'{root}/{name}_{sn}', exist_ok=True)
+# ser_svg_fn = f'{root}/{name}_{sn}/serial_{name}_{sn}.svg'
+# svg_fn = f'{root}/{name}_{sn}/{name}_{sn}.svg'
+# jsfn = f'{root}/{name}_{sn}/{name}_{sn}.json'
 
-(diffusive_mass, boundary_mass, crystal_mass, attached, cur_step) =  run_simulation(random_seed=random_seed, mass_ratio_cutoff=mass_ratio_cutoff, gamma=gamma, params=params)
-render_svg(crystal_mass=crystal_mass, attached=attached, random_state=random_seed, svg_fn=svg_fn)
-print()
-plot_snowflake(crystal_mass=crystal_mass, attached=attached, diffusive_mass=diffusive_mass)
-write_serial_number(name, sn, ser_svg_fn)
+# (diffusive_mass, boundary_mass, crystal_mass, attached, cur_step) =  run_simulation(random_seed=random_seed, mass_ratio_cutoff=mass_ratio_cutoff, gamma=gamma, params=params)
+# render_svg(crystal_mass=crystal_mass, attached=attached, random_state=random_seed, svg_fn=svg_fn)
+# print()
+# plot_snowflake(crystal_mass=crystal_mass, attached=attached, diffusive_mass=diffusive_mass)
+# write_serial_number(name, sn, ser_svg_fn)
 
-info = {
-    'name': name,
-    'salt': salt,
-    'n_steps': cur_step,
-    'seed': random_seed,
-    'sn': sn,
-    'mass_ratio_cutoff': mass_ratio_cutoff,
-    'spot_threshold': spot_threshold
-}
+# info = {
+#     'name': name,
+#     'salt': salt,
+#     'n_steps': cur_step,
+#     'seed': random_seed,
+#     'sn': sn,
+#     'mass_ratio_cutoff': mass_ratio_cutoff,
+#     'spot_threshold': spot_threshold
+# }
 
-with open(jsfn, 'w') as fh:
-    json.dump(info, fh)
+# with open(jsfn, 'w') as fh:
+#     json.dump(info, fh)
 
-print(f"\n\n{'-' * 20}\nGenerator details\n{'-' * 20}\n")
-pprint(info)
+# print(f"\n\n{'-' * 20}\nGenerator details\n{'-' * 20}\n")
+# pprint(info)
+
+def get_cli():
+    parser = argparse.ArgumentParser(description='Snowflake Generator.')
+    parser.add_argument('-n', '--name', dest="name", type=str, help="The name of the snowflake.")
+    parser.add_argument('-s', '--size', dest="size", type=int, help="The size of the snowflake.")
+    parser.add_argument('-e', '--env', dest='env', help='Comma seperated key=val env overrides')
+    parser.add_argument('-b', '--bw', dest='bw', action='store_true', help='Write out the image in black and white.')
+    parser.add_argument('-r', '--randomize', dest='randomize', action='store_true', help='Randomize environment.')
+    parser.add_argument('-x', '--extrude', dest='pipeline_3d', action='store_true', help='Enable 3d pipeline.')
+    parser.add_argument('-l', '--laser', dest='pipeline_lasercutter', action='store_true', help='Enable Laser Cutter pipeline.')
+    parser.add_argument('-M', '--max-steps', dest='max_steps', type=int, help='Maximum number of iterations.')
+    parser.add_argument('-m', '--margin', dest='margin', type=float, help='When to stop snowflake growth (between 0 and 1).')
+    parser.add_argument('-c', '--curves', dest='curves', action='store_true', help='Enable use of name to generate environment curves.')
+    parser.add_argument('-L', '--datalog', dest='datalog', action='store_true', help='Enable step wise data logging.')
+    parser.add_argument('-D', '--debug', dest='debug', action='store_true', help='Show every step.')
+    parser.add_argument('-v', '--movie', dest='movie', action='store_true', help='Render a movie.')
+    parser.add_argument('-W', '--width', dest='width', type=float, help="Width of target render.")
+    parser.add_argument('-H', '--height', dest='height', type=float, help="Height of target render.")
+
+    parser.set_defaults(**SNOWFLAKE_DEFAULTS)
+    args = parser.parse_args()
+
+    args.name = str.join('', map(str.lower, args.name))
+    ####CubicSpline is unhappy with arithmatic characters in the seed name
+    args.name = ''.join(filter(str.isalpha,args.name))
+
+    #args.target_size = None
+    if args.width and args.height:
+        args.shape = (args.width, args.height)
+        #args.target_size = (args.width, args.height)
+    if args.pipeline_3d:
+        args.bw = True
+    return args
+
+if __name__ == "__main__":
+    args = get_cli()
+    print(args)
+    print("initializing parameters")
+    (random_seed, gamma, params) = get_gamma_and_params(name=args.name, max_steps=args.max_steps, salt=salt)
+    print("end initializing parameters")
+
+    print("making necessary folders")
+    sn = hex(random_seed)[2:]
+    root = 'content/SnowflakeDesigns'
+    theDir = (f'{root}/{args.name}_{sn}')
+    os.makedirs(theDir, exist_ok=True)
+    print("end making necessary folders")
+
+    # ser_svg_fn = f'{root}/{name}_{sn}/serial_{name}_{sn}.svg'
+    # svg_fn = f'{root}/{name}_{sn}/{name}_{sn}.svg'
+    # jsfn = f'{root}/{name}_{sn}/{name}_{sn}.json'
+    # print("end making necessary folders")
+
+    ####################################################
+    self_mask = np.zeros((3,3))
+    self_mask[1,1] = 1
+    neighbor_mask = np.fliplr(1 - np.eye(3))
+    self_and_neighbor_mask = self_mask + neighbor_mask
+
+    # convert numpy arrays over to JAX
+    self_mask = jnp.array(self_mask)
+    neighbor_mask = jnp.array(neighbor_mask)
+    self_and_neighbor_mask = jnp.array(self_and_neighbor_mask)
+    print("starting simulation")
+    (diffusive_mass, boundary_mass, crystal_mass, attached, cur_step) =  run_simulation(random_seed=random_seed, mass_ratio_cutoff=mass_ratio_cutoff, max_steps=args.max_steps, gamma=gamma, params=params)
+    print("ending run simulation")
+    # render_svg(crystal_mass=crystal_mass, attached=attached, random_state=random_seed, svg_fn=svg_fn)
+    # print()
+    # plot_snowflake(crystal_mass=crystal_mass, attached=attached, diffusive_mass=diffusive_mass)
+    # # write_serial_number(name, sn, ser_svg_fn)
