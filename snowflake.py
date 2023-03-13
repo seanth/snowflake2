@@ -176,7 +176,9 @@ def plot_snowflake(crystal_mass=None, attached=None, diffusive_mass=None):
     thePath = f'{root}/{args.name}_{sn}/{args.name}_{sn}.png'
     sz = 7
     fig = plt.figure(figsize=(sz, sz))
-    plt.imshow(prep_image(crystal_mass), interpolation='nearest')
+    if args.show_axis==False:
+        plt.axis("off")
+    plt.imshow(prep_image(crystal_mass), interpolation='nearest', cmap=args.color_map)
     #plt.show()
     fig.savefig(thePath)
     
@@ -333,9 +335,11 @@ def get_cli():
     parser.add_argument('-r', '--randomize', dest='randomize', action='store_true', help='Randomize environment.')
     parser.add_argument('-x', '--extrude', dest='pipeline_3d', action='store_true', help='Enable 3d pipeline.')
     parser.add_argument('-l', '--laser', dest='pipeline_lasercutter', action='store_true', help='Enable Laser Cutter pipeline.')
-    parser.add_argument('-M', '--max-steps', dest='max_steps', type=int, help='Maximum number of iterations.')
-    parser.add_argument('-m', '--margin', dest='margin', type=float, help='When to stop snowflake growth (between 0 and 1).')
-    parser.add_argument('-c', '--curves', dest='curves', action='store_true', help='Enable use of name to generate environment curves.')
+    parser.add_argument('-m', '--max-steps', dest='max_steps', type=int, help='Maximum number of iterations.')
+    parser.add_argument('-M', '--margin', dest='margin', type=float, help='When to stop snowflake growth (between 0 and 1).')
+    #parser.add_argument('-c', '--curves', dest='curves', action='store_true', help='Enable use of name to generate environment curves.')
+    parser.add_argument('-c', '--color_map', dest='color_map', type=str, help='What colour map should be used for flake image')
+    parser.add_argument('-a', '--show_axis', dest='show_axis', type=bool, help='Show an axis on the flake image?')
     parser.add_argument('-L', '--datalog', dest='datalog', action='store_true', help='Enable step wise data logging.')
     parser.add_argument('-D', '--debug', dest='debug', action='store_true', help='Show every step.')
     parser.add_argument('-v', '--movie', dest='movie', action='store_true', help='Render a movie.')
