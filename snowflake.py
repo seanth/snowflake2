@@ -1,3 +1,23 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# <a href="https://colab.research.google.com/gist/vishnubob/fd4eb04d21716c2c180c2f3b72202d03/snowflake-generator-2-0-sean-hammond.ipynb" target="_parent"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a>
+
+# # Snowflake Generator 2.0
+# 
+# This is a snowflake simulator. It generates realistic looking snowflakes by modeling the cellular diffusion of water vapor along with the phase transitions from gas to frozen ice at a mesoscopic scale. In other words, each cell in the simulation represents millions of water molecules.
+# 
+# The underlying math driving the model is adopted from the research paper "[MODELING SNOW CRYSTAL GROWTH II: A mesoscopic lattice map with plausible dynamics](https://www.sciencedirect.com/science/article/abs/pii/S0167278907003387)" by Janko Gravner and David Griffeath.
+# 
+# The first revision of this generator ran entirely on the CPU and required over an hour of computation for each snowflake.  This rewrite introduces a vectorized version of the engine, and is capable of running on CPUs or GPUs.  On modern GPUs, a single snowflake takes just seconds to render.
+# 
+# This notebook takes a name as a seed for generating a unique snowflake.  The output creates a few plots and an SVG optimized for laser cutting.
+# 
+# 
+# 
+#Name: Enter the name as a generative seed for the snowflake simulator
+#max_steps: Maximum number of steps in the simulation. Min 1000. Max 10000
+
 #@title Design your Snowflake
 
 #@markdown ## Snowflake seed
@@ -18,10 +38,10 @@ spot_threshold = 0 #@param {type:"slider", min:0, max:500, step:10}
 
 #@markdown Upon the first execution, there might be a few minute delay while the notebook provisions the environment. 
 
-!(if [ ! -f /tmp/sentinel ]; then apt-get update && apt-get install potrace && pip install svgwrite svgpathtools splines && touch /tmp/sentinel; fi) 2>&1 > /dev/null
-!(if [ ! -f "SourceCodePro-Regular.ttf" ]; then wget https://github.com/adobe-fonts/source-code-pro/raw/release/TTF/SourceCodePro-Regular.ttf > /dev/null 2>/dev/null; fi)
+# !(if [ ! -f /tmp/sentinel ]; then apt-get update && apt-get install potrace && pip install svgwrite svgpathtools splines && touch /tmp/sentinel; fi) 2>&1 > /dev/null
+# !(if [ ! -f "SourceCodePro-Regular.ttf" ]; then wget https://github.com/adobe-fonts/source-code-pro/raw/release/TTF/SourceCodePro-Regular.ttf > /dev/null 2>/dev/null; fi)
 
-ft = "SourceCodePro-Regular.ttf"
+# ft = "SourceCodePro-Regular.ttf"
 
 from PIL import Image, ImageDraw, ImageFont
 
