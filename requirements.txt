@@ -1,0 +1,9 @@
+configparser
+numpy
+scipy               
+jax                 
+Pillow
+matplotlib              
+sklearn        
+svgpathtools        
+svgwrite            

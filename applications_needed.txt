@@ -1,0 +1,4 @@
+Requires:
+
+potrace
+openscad

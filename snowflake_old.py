@@ -91,7 +91,6 @@ ParamOrder = ('beta', 'theta', 'alpha', 'kappa', 'mu', 'upsilon', 'sigma')
 conv2d = jsp.signal.convolve
 
 fileNameList = []
-svgFileNameList = []
 
 def get_gamma_and_params(name, max_steps=SNOWFLAKE_DEFAULTS['max_steps'], salt=0, curves=DefaultCurves):
     t_value = name.encode('utf8')
@@ -186,9 +185,6 @@ def potrace(img, spot_threshold=None, size=None, margin=None, angle=None, dpi=96
         cmd.append('--tight')
     input_img = os.path.join(f'{root}/{args.name}_{sn}/', f'input_image{theLayer}.bmp')
     output_svg = os.path.join(f'{root}/{args.name}_{sn}/', f'output_trace{theLayer}.svg')
-    global svgFileNameList
-    svgFileNameList.append(output_svg)
-
     print("   ***Generating BMP %s..." % os.path.basename(input_img))
     img.save(input_img)
     #-o filename, --output filename
@@ -380,8 +376,8 @@ def get_cli():
     #parser.add_argument('-L', '--datalog', dest='datalog', action='store_true', help='Enable step wise data logging.')
     #parser.add_argument('-D', '--debug', dest='debug', action='store_true', help='Show every step.')
     #parser.add_argument('-v', '--movie', dest='movie', action='store_true', help='Render a movie.')
-    parser.add_argument('-W', '--width', dest='width', type=int, help="[int] Width of target render.")
-    parser.add_argument('-H', '--height', dest='height', type=int, help="[int] Height of target render.")
+    parser.add_argument('-W', '--width', dest='width', type=float, help="[int] Width of target render.")
+    parser.add_argument('-H', '--height', dest='height', type=float, help="[int] Height of target render.")
 
     parser.set_defaults(**SNOWFLAKE_DEFAULTS)
     args = parser.parse_args()
@@ -454,9 +450,8 @@ if __name__ == "__main__":
     if args.pipeline_3d==True:
         ###The flow is 1.)bmp-->2.)eps-->3.)dxf-->4.)stl
         ###using 1.)potrace-->2.)potrace-->3.)pstoedit-->4.)openscad
-
-        #get rid of the first two entries
-        svgFileNameList=svgFileNameList[1:]
+        print(fileNameList)
+        sys.exit()
 
         # print("***Attempting to turn BMP layers into EPS files...")
         # ###can't use potrace to go straight to dxf
@@ -524,66 +519,32 @@ if __name__ == "__main__":
         #     os.system(cmd)
         #     dfxFileList.append(dxfFileName)
 
-        print("***Attempting to generate a scad files for SVGs...")
-        theSTLDir = (f'{theDir}/STL_folder')
-        os.makedirs(theSTLDir, exist_ok=True)
-
-        i=0
-        for fileName in svgFileNameList:
-            i=i+1
-            scadFileName = "%s_%i.scad" % (args.name, i)
-            scadFileName = os.path.join(theDir, scadFileName)
-
-            numLayers=float(len(svgFileNameList))
-            heightPerLayer=2.0/numLayers
+        print("***Attempting to generate a scad file...")
+        scadFileName = "%s_3d.scad" % args.name
+        scadFileName = os.path.join(theDir, scadFileName)
+        f = open(scadFileName, 'w')
+        #I could use args.numb_layers, but the number of files _might_ differ
+        numLayers=float(len(dfxFileList))
+        heightPerLayer=1.0/numLayers
+        #for (i, fileName) in enumerate(dfxFileList,1):
+        for (i, fileName) in enumerate(dfxFileList,1):
             fileName=os.path.abspath(fileName)
+            # scad_txt = 'scale([30, 30, 30]) linear_extrude(height=%f, layer="0") import("%s");\n' % (i*0.18, fileName)
+            #scad_txt = 'scale([30, 30, 30]) linear_extrude(height=%f, layer="0") import("%s");\n' % (i*heightPerLayer, fileName)
             scad_txt = 'linear_extrude(height=%f, layer="0") import(file="%s", center = true, dpi = 96);\n' % (i*heightPerLayer, fileName)
-            print(scadFileName)
-            print(scad_txt)
-            f = open(scadFileName, 'w')
             f.write(scad_txt)
-            f.close()
-            print("***Attempting to generate a STL using OpenSCAD...")
-
-            stlFileName = os.path.split(scadFileName)[1]
-            stlFileName = os.path.splitext(stlFileName)[0]
-            stlFileName = "%s.stl" % stlFileName
-            stlFileName = os.path.join(theSTLDir, stlFileName)
-
-            stlFileName=os.path.abspath(stlFileName)
-            scadFileName=os.path.abspath(scadFileName)
-
-            if sys.platform=="win32":
-                cmd = f'openscad.com -o {stlFileName} {scadFileName}'
-            else:
-                cmd = f'{args.OpenSCADPath}/Contents/MacOS/OpenSCAD -o {stlFileName} {scadFileName} '
-            msg = "Running '%s'" % cmd
-            print(msg)
-            os.system(cmd)
-        # sys.exit()
-
-        # f = open(scadFileName, 'w')
-        # #I could use args.numb_layers, but the number of files _might_ differ
-
-        # #for (i, fileName) in enumerate(dfxFileList,1):
-        # for (i, fileName) in enumerate(svgFileNameList,1):
-        #     fileName=os.path.abspath(fileName)
-        #     # scad_txt = 'scale([30, 30, 30]) linear_extrude(height=%f, layer="0") import("%s");\n' % (i*0.18, fileName)
-        #     #scad_txt = 'scale([30, 30, 30]) linear_extrude(height=%f, layer="0") import("%s");\n' % (i*heightPerLayer, fileName)
-        #     scad_txt = 'linear_extrude(height=%f, layer="0") import(file="%s", center = true, dpi = 96);\n' % (i*heightPerLayer, fileName)
-        #     f.write(scad_txt)
-        # f.close()
-        # sys.exit()
-        # print("***Attempting to generate a STL using OpenSCAD...")
-        # stlFileName = "%s_3d.stl" % args.name
-        # stlFileName = os.path.join(theDir, stlFileName)
-        # if sys.platform=="win32":
-        #     cmd = f'openscad.com -o {stlFileName} {scadFileName}'
-        # else:
-        #     cmd = f'{args.OpenSCADPath}/Contents/MacOS/OpenSCAD -o {stlFileName} {scadFileName} '
-        # msg = "Running '%s'" % cmd
-        # print(msg)
-        # #os.system(cmd)
+        f.close()
+        sys.exit()
+        print("***Attempting to generate a STL using OpenSCAD...")
+        stlFileName = "%s_3d.stl" % args.name
+        stlFileName = os.path.join(theDir, stlFileName)
+        if sys.platform=="win32":
+            cmd = f'openscad.com -o {stlFileName} {scadFileName}'
+        else:
+            cmd = f'{args.OpenSCADPath}/Contents/MacOS/OpenSCAD -o {stlFileName} {scadFileName} '
+        msg = "Running '%s'" % cmd
+        print(msg)
+        #os.system(cmd)
 
     ####################################################
     print()
